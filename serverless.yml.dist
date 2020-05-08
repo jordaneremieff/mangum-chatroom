@@ -1,0 +1,289 @@
+service: mangum-example
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
+    slimPatterns:
+      - '**/*.py[c|o]'
+      - '**/__pycache__*'
+  DB_NAME: <db name>
+  DB_USERNAME: <username>
+  DB_PASSWORD: <password>
+  DB_HOST:
+    Fn::GetAtt: [RDSInstance, Endpoint.Address]
+  DB_PORT:
+    Fn::GetAtt: [RDSInstance, Endpoint.Port]
+  VPC_CIDR: 10
+  WEBSOCKET_URL:
+      Fn::Join:
+      - ""
+      - - "wss://"
+        - Ref: "WebsocketsApi"
+        - ".execute-api."
+        - ${self:provider.region}
+        - "."
+        - Ref: "AWS::URLSuffix"
+        - "/"
+        - ${self:provider.stage}
+  DATABASE_URL:
+    Fn::Join:
+    - ""
+    - - "postgresql://"
+      - ${self:custom.DB_USERNAME}
+      - ":"
+      - ${self:custom.DB_PASSWORD}
+      - "@"
+      - ${self:custom.DB_HOST}
+      - ":"
+      - ${self:custom.DB_PORT}
+      - "/"
+      - ${self:custom.DB_NAME}
+package:
+  exclude:
+    - node_modules/**
+    - venv/**
+    - .direnv/**
+plugins:
+  - serverless-python-requirements
+provider:
+  name: aws
+  runtime: python3.7
+  logs:
+    httpApi: true
+  stage: ${opt:stage, "dev"}
+  region: ${opt:region, "ap-southeast-1"}
+  timeout: 20
+  memorySize: 256
+  vpc:
+    securityGroupIds:
+      - !GetAtt LambdaSecurityGroup.GroupId
+    subnetIds:
+      - Ref: PrivateSubnetA
+      - Ref: PrivateSubnetB
+      - Ref: PrivateSubnetC
+  apiName: ${self:service}-http-api
+  websocketsApiName: ${self:service}-ws-api
+  websocketsApiRouteSelectionExpression: $request.body.action
+  environment:
+    WEBSOCKET_URL: ${self:custom.WEBSOCKET_URL}
+    DATABASE_URL: ${self:custom.DATABASE_URL}
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "ec2:CreateNetworkInterface"
+        - "ec2:DescribeNetworkInterfaces"
+        - "ec2:DetachNetworkInterface"
+        - "ec2:DeleteNetworkInterface"
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - "execute-api:ManageConnections"
+      Resource:
+        - "arn:aws:execute-api:${self:provider.region}:*:*/@connections/*"
+        - "arn:aws:lambda:${self:provider.region}:*:*"
+functions:
+  app:
+    handler: app.asgi.handler
+    layers:
+      - arn:aws:lambda:ap-southeast-1:898466741470:layer:psycopg2-py37:5
+    events:
+    - http: ANY /
+    - websocket:
+        route: $connect
+    - websocket: 
+        route: $disconnect
+    - websocket: 
+        route: $default
+resources:
+  Resources:
+    LambdaVPC:
+      Type: AWS::EC2::VPC
+      Properties:
+        CidrBlock: 10.0.0.0/16
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+        InstanceTenancy: default
+        Tags: 
+          - Key: "Name"
+            Value: ${self:service}-${self:provider.stage}-vpc
+    PublicSubnetA:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: ${self:provider.region}a
+        CidrBlock: 10.0.0.0/24
+        VpcId:
+          Ref: LambdaVPC
+    PrivateSubnetA:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: ${self:provider.region}a
+        CidrBlock: 10.0.1.0/24
+        VpcId:
+          Ref: LambdaVPC
+    PublicSubnetB:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: ${self:provider.region}b
+        CidrBlock: 10.0.2.0/24
+        VpcId:
+          Ref: LambdaVPC
+    PrivateSubnetB:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: ${self:provider.region}b
+        CidrBlock: 10.0.3.0/24
+        VpcId:
+          Ref: LambdaVPC
+    PublicSubnetC:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: ${self:provider.region}c
+        CidrBlock: 10.0.4.0/24
+        VpcId:
+          Ref: LambdaVPC
+    PrivateSubnetC:
+      Type: AWS::EC2::Subnet
+      Properties:
+        AvailabilityZone: ${self:provider.region}c
+        CidrBlock: 10.0.5.0/24
+        VpcId:
+          Ref: LambdaVPC
+    InternetGateway:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+        Tags:
+          - Key: Name
+            Value: ${self:service}-${self:provider.stage}-igw
+    VPCGatewayAttachment:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+        InternetGatewayId:
+          Ref: InternetGateway
+        VpcId:
+          Ref: LambdaVPC
+    PublicRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId:
+          Ref: LambdaVPC
+        Tags:
+          - Key: Name
+            Value: ${self:service}-${self:provider.stage}-public-route
+    PublicRoute:
+      Type: AWS::EC2::Route
+      Properties:
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId:
+          Ref: InternetGateway
+        RouteTableId:
+          Ref: PublicRouteTable
+    PublicSubnetARouteTableAssociationPublic:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: PublicRouteTable
+        SubnetId:
+          Ref: PublicSubnetA
+    PublicSubnetBRouteTableAssociationPublic:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: PublicRouteTable
+        SubnetId:
+          Ref: PublicSubnetB
+    PublicSubnetCRouteTableAssociationPublic:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: PublicRouteTable
+        SubnetId:
+          Ref: PublicSubnetC
+    VPCEIP:
+      Type: AWS::EC2::EIP
+      Properties:
+        Domain: vpc
+    NatGateway:
+      Type: AWS::EC2::NatGateway
+      Properties:
+        AllocationId:
+          Fn::GetAtt: [VPCEIP, AllocationId]
+        SubnetId:
+          Ref: PublicSubnetA
+    PrivateRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId:
+          Ref: LambdaVPC
+        Tags:
+          - Key: Name
+            Value: ${self:service}-${self:provider.stage}-private-route
+    PrivateRoute:
+      Type: AWS::EC2::Route
+      Properties:
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId:
+          Ref: NatGateway
+        RouteTableId:
+          Ref: PrivateRouteTable
+    PrivateSubnetARouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: PrivateRouteTable
+        SubnetId:
+          Ref: PrivateSubnetA
+    PrivateSubnetBRouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: PrivateRouteTable
+        SubnetId:
+          Ref: PrivateSubnetB
+    PrivateSubnetCRouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: PrivateRouteTable
+        SubnetId:
+          Ref: PrivateSubnetC
+    RDSSubnetGroup: 
+      Type: AWS::RDS::DBSubnetGroup
+      Properties:
+        DBSubnetGroupDescription: "RDS Subnet Group"
+        SubnetIds:
+          - Ref: PrivateSubnetA
+          - Ref: PrivateSubnetB
+          - Ref: PrivateSubnetC
+        Tags: 
+          - Key: "Name"
+            Value: "RDSSubnetGroup"
+    LambdaSecurityGroup:
+      DependsOn: LambdaVPC
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: SecurityGroup for Serverless Functions
+        VpcId:
+          Ref: LambdaVPC
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 0
+            ToPort: 65535
+            CidrIp: 0.0.0.0/0
+        Tags: 
+          - Key: "Name"
+            Value: "LambdaSecurityGroup"
+    RDSInstance:
+      DependsOn: VPCGatewayAttachment
+      Type: AWS::RDS::DBInstance
+      Properties:
+        MasterUsername: ${self:custom.DB_USERNAME}
+        MasterUserPassword: ${self:custom.DB_PASSWORD}
+        AllocatedStorage: 20
+        DBName: ${self:custom.DB_NAME}
+        DBInstanceClass: db.t2.micro
+        VPCSecurityGroups:
+        - !GetAtt LambdaSecurityGroup.GroupId
+        DBSubnetGroupName:
+          Ref: RDSSubnetGroup
+        Engine: postgres
+        PubliclyAccessible: false

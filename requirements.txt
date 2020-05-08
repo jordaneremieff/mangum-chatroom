@@ -1,0 +1,3 @@
+git+git://github.com/erm/mangum@master#egg=mangum
+starlette[full]
+boto3
