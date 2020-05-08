@@ -2,12 +2,15 @@
 
 An example ASGI application deployment for AWS Lambda & API Gateway.
 
+**Documentation**: https://mangum.io/websockets/
+
 **Work in Progress**
 
 ## Requirements
 
 - Python 3.7
 - [Serverless Framework](https://github.com/serverless/serverless)
+
 
 ### Setup
 
