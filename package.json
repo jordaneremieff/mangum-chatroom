@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "dependencies": {},
   "devDependencies": {
-    "serverless-python-requirements": "^5.1.0",
+    "serverless-dotenv-plugin": "^2.4.2",
+    "serverless-offline": "^6.1.5",
+    "serverless-python-requirements": "^5.1.0"
   }
 }

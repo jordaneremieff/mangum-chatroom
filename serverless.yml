@@ -1,0 +1,71 @@
+service: mangum-chatroom
+
+custom:
+  serverless-offline:
+    noPrependStageInUrl: true
+  pythonRequirements:
+    dockerizePip: true
+    slimPatterns:
+      - '**/*.py[c|o]'
+      - '**/__pycache__*'
+  WEBSOCKET_URL:
+      Fn::Join:
+      - ""
+      - - "wss://"
+        - Ref: "WebsocketsApi"
+        - ".execute-api."
+        - ${self:provider.region}
+        - "."
+        - Ref: "AWS::URLSuffix"
+        - "/"
+        - ${self:provider.stage}
+provider:
+  name: aws
+  runtime: python3.8
+  logs:
+    httpApi: true
+  stage: ${opt:stage, "dev"}
+  region: ${opt:region, "ap-southeast-1"}
+  timeout: 20
+  memorySize: 256
+  apiName: ${self:service}-http
+  websocketsApiName: ${self:service}-ws
+  websocketsApiRouteSelectionExpression: $request.body.action
+  environment:
+    WEBSOCKET_DSN: ${env:WEBSOCKET_DSN}
+    DEBUG: ${env:DEBUG}
+    WEBSOCKET_URL: ${self:custom.WEBSOCKET_URL}
+    SECRET_KEY: ${self:custom.SECRET_KEY}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - "execute-api:ManageConnections"
+      Resource:
+        - "arn:aws:execute-api:${self:provider.region}:*:*/@connections/*"
+        - "arn:aws:lambda:${self:provider.region}:*:*"
+functions:
+  app:
+    handler: src.asgi.handler
+    events:
+      - httpApi:
+          path: /chat
+          method: GET
+      - httpApi:
+          path: /chat/{param}
+          method: GET
+      - websocket:
+          route: $connect
+      - websocket: 
+          route: $disconnect
+      - websocket: 
+          route: $default
+package:
+  exclude:
+    - node_modules/**
+    - venv/**
+    - .direnv/**
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+  - serverless-dotenv-plugin

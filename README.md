@@ -1,31 +1,16 @@
-# mangum-example
-
-An example ASGI application deployment for AWS Lambda & API Gateway.
-
-**Documentation**: https://mangum.io/websockets/
+# mangum-chatroom
 
 **Work in Progress**
 
+An example ASGI chatroom application and deployment for AWS Lambda & API Gateway. 
+
+**IMPORTANT**
+
+The WebSocket support demonstrated in this example is currently only available in the working branch for WebSocket pubsub in this PR: https://github.com/erm/mangum/pull/122. It is in a very experimental/unfinished state atm, so be careful if you attempt to run it.
+
 ## Requirements
 
-- Python 3.7
+- Python 3.8
+- [Starlette](https://www.starlette.io/)
 - [Serverless Framework](https://github.com/serverless/serverless)
-
-
-### Setup
-
-- Rename `serverless.yml.dist` to `serverless.yml`
-
-- Edit the `serverless.yml` file, set a database name, username, and password:
-
-```
-  DB_NAME: <db name>
-  DB_USERNAME: <username>
-  DB_PASSWORD: <password>
-```
-
-- Save and deploy
-
-```
-sls deploy
-```
+- A WebSocket DSN, either S3 (boto3) or Redis (redis-py)

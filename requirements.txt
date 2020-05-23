@@ -1,3 +1,4 @@
-git+git://github.com/erm/mangum@master#egg=mangum
+git+git://github.com/erm/mangum@websocket-dev-2#egg=mangum
 starlette[full]
 boto3
+redis

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chatroom | {{ channel_name }}</title>
+</head>
+<body>
+  <h1 id="heading">Connecting to {{ channel_name }}...</h1>
+  <div id="channel" style="display:none;">
+    <form action="" onsubmit="publish(event)">
+      <input type="text" id="messageInput" autocomplete="off" />
+      <button>Send</button>
+    </form>
+    <ul id="channelMessages"></ul>
+  </div>
+  <script>
+    var wsUrl = "{{ websocket_url }}"
+    var ws = new WebSocket(wsUrl)
+    var channelName = "{{ channel_name }}"
+    var hasJoined = false
+    ws.onopen = function() {
+      console.log("Connection opened.")
+      setTimeout(subscribe, 1000)
+    }
+
+    ws.onmessage = function(event) {
+      console.log(event)
+      channelMessages = document.getElementById("channelMessages")
+      var newMessage = document.createElement("div");      
+      newMessage.innerHTML = event.data
+      channelMessages.appendChild(newMessage)
+        
+    }
+
+    ws.onclose = function(event) {
+      console.log("WebSocket closed.")
+    }
+
+    ws.onerror = function(event) {
+      console.error("WebSocket error ", event.message);
+      ws.close()
+    }
+
+    function publish(event) {
+      var messageInput = document.getElementById("messageInput")
+      var body = "[User {{user_id}}] " + messageInput.value
+      console.log(body)
+      ws.send(JSON.stringify({
+        "type": "on.publish",
+        "channel": channelName,
+        "body": body
+      }))
+      messageInput.value = ""
+      event.preventDefault()
+    }
+
+    function subscribe() {
+      ws.send(JSON.stringify({
+        "type": "on.subscribe",
+        "channel": channelName
+      }))
+
+      document.getElementById("heading").innerHTML = "Connected to " + channelName
+      document.getElementById("channel").style.display = "block";  
+    }
+  </script>
+</body>
+</html>
